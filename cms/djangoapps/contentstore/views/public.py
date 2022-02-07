@@ -7,10 +7,30 @@ from django.conf import settings
 from django.shortcuts import redirect
 from urllib.parse import quote_plus  # lint-amnesty, pylint: disable=wrong-import-order
 from waffle.decorators import waffle_switch
+from edx_toggles.toggles import SettingToggle
+from django.contrib import admin
 
 from common.djangoapps.edxmako.shortcuts import render_to_response
 
 from ..config import waffle
+
+# .. toggle_name: REDIRECT_CMS_ADMIN_LOGIN_TO_LMS
+# .. toggle_implementation: SettingToggle
+# .. toggle_default: False
+# .. toggle_description: Set this to True if you want to cms-admin login from lms login.
+# .. in case of logout it will use lms logout also.
+# .. toggle_use_cases: open_edx
+# .. toggle_creation_date: 2022-02-07
+
+
+REDIRECT_CMS_ADMIN_LOGIN_TO_LMS = SettingToggle(
+    "REDIRECT_CMS_ADMIN_LOGIN_TO_LMS", default=False, module_name=__name__
+)
+
+
+def cms_admin_login_using_lms_login():
+    return REDIRECT_CMS_ADMIN_LOGIN_TO_LMS.is_enabled()
+
 
 __all__ = [
     'register_redirect_to_lms', 'login_redirect_to_lms', 'howitworks', 'accessibility',
@@ -46,7 +66,10 @@ def redirect_to_lms_login_for_admin(request):
     """
     This view redirect the admin/login url to the site's login page.
     """
-    return redirect('/login?next=/admin')
+    if REDIRECT_CMS_ADMIN_LOGIN_TO_LMS.is_enabled():
+        return redirect('/login?next=/admin')
+    else:
+        return admin.site.login(request)
 
 
 def _build_next_param(request):
