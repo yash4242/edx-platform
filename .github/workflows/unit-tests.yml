@@ -11,6 +11,7 @@ jobs:
     if: github.repository == 'openedx/edx-platform' || github.repository == 'edx/edx-platform-private'
     runs-on: [ edx-platform-runner ]
     strategy:
+      fail-fast: false    # TEMP: will not be merged.
       matrix:
         python-version: ['3.8']
         django-version: ["3.2"]
