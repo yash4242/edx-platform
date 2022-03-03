@@ -16,10 +16,13 @@ from django.test.utils import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
+from urllib.parse import quote
 
 from common.djangoapps.student.models import PendingEmailChange, UserProfile
 from common.djangoapps.student.models_api import do_name_change_request, get_pending_name_change
 from common.djangoapps.student.tests.factories import TEST_PASSWORD, RegistrationFactory, UserFactory
+from openedx.core.djangoapps.user_api.accounts.tests.factories import UserRetirementStatusFactory, \
+    RetirementStateFactory
 from openedx.core.djangoapps.oauth_dispatch.jwt import create_jwt_for_user
 from openedx.core.djangoapps.user_api.accounts import ACCOUNT_VISIBILITY_PREF_KEY
 from openedx.core.djangoapps.user_api.models import UserPreference
@@ -478,6 +481,33 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
 
         response = client.get(url + f'?lms_user_id={non_integer_id}')
         assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    @mock.patch('openedx.core.djangoapps.user_api.accounts.views.is_email_retired')
+    @ddt.data(
+        (datetime.datetime.now(pytz.UTC), True),
+        (datetime.datetime.now(pytz.UTC) - datetime.timedelta(days=15), False)
+    )
+    @ddt.unpack
+    def test_search_emails_retired_before_cooloff_period(self, created_date, can_cancel, mock_is_email_retired):
+        """
+        Tests either of the two possibilities i.e. either the retirement is created before the cool off time
+        or after the cool off time.
+        """
+        mock_is_email_retired.return_value = True
+        client = self.login_client('staff_client', 'staff_user')
+        retirement_state = RetirementStateFactory.create(state_name='PENDING', state_execution_order=1)
+        _ = UserRetirementStatusFactory.create(
+            user=self.user,
+            current_state=retirement_state,
+            last_state=retirement_state,
+            original_email=self.user.email,
+            created=created_date
+        )
+        url = reverse("accounts_detail_api")
+        response = client.get(url + f'?email={quote(self.user.email)}')
+        assert response.data == {
+            "error_msg": "This email is associated to a retired account.", "can_cancel_retirement": can_cancel
+        }
 
     def test_search_emails(self):
         client = self.login_client('staff_client', 'staff_user')

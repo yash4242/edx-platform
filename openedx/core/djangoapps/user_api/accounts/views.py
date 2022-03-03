@@ -48,13 +48,15 @@ from common.djangoapps.student.models import (  # lint-amnesty, pylint: disable=
     get_potentially_retired_user_by_username,
     get_retired_email_by_email,
     get_retired_username_by_username,
-    is_username_retired
+    is_username_retired,
+    is_email_retired
 )
 from common.djangoapps.student.models_api import (
     confirm_name_change,
     do_name_change_request,
     get_pending_name_change
 )
+from openedx.core.djangoapps.user_api import accounts
 from openedx.core.djangoapps.ace_common.template_context import get_base_template_context
 from openedx.core.djangoapps.api_admin.models import ApiAccessRequest
 from openedx.core.djangoapps.course_groups.models import UnregisteredLearnerCohortAssignments
@@ -76,8 +78,10 @@ from ..models import (
     UserRetirementPartnerReportingStatus,
     UserRetirementStatus
 )
+from edx_django_utils.user import generate_password
 from .api import get_account_settings, update_account_settings
-from .permissions import CanDeactivateUser, CanGetAccountInfo, CanReplaceUsername, CanRetireUser
+from .permissions import CanDeactivateUser, CanGetAccountInfo, CanReplaceUsername, CanRetireUser, \
+    CanCancelUserRetirement
 from .serializers import (
     PendingNameChangeSerializer,
     UserRetirementPartnerReportSerializer,
@@ -318,6 +322,29 @@ class AccountViewSet(ViewSet):
         if usernames:
             search_usernames = usernames.strip(',').split(',')
         elif user_email:
+            import pdb
+            pdb.set_trace()
+            if is_email_retired(user_email):
+                cool_off_days = 14
+                can_cancel_retirement = True
+                earliest_datetime = datetime.datetime.now(pytz.UTC) - datetime.timedelta(days=cool_off_days)
+                try:
+                    UserRetirementStatus.objects.get(
+                        created__gt=earliest_datetime,
+                        created__lt=datetime.datetime.now(pytz.UTC),
+                        original_email=user_email
+                    )
+                except UserRetirementStatus.DoesNotExist:
+                    can_cancel_retirement = False
+
+                context = {
+                    'error_msg': accounts.RETIRED_EMAIL_MSG,
+                    'can_cancel_retirement': can_cancel_retirement
+                }
+
+                return Response(
+                    context, status=status.HTTP_404_NOT_FOUND
+                )
             user_email = user_email.strip('')
             try:
                 user = User.objects.get(email=user_email)
@@ -833,6 +860,56 @@ class AccountRetirementPartnerReportView(ViewSet):
         retirement_statuses.delete()
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CancelAccountRetirementStatusView(ViewSet):
+    """
+    Provides API endpoints for canceling retirement process for a user's account.
+    """
+    authentication_classes = (JwtAuthentication, SessionAuthentication)
+    permission_classes = (permissions.IsAuthenticated, CanCancelUserRetirement,)
+
+    def cancel_retirement(self, request):
+        """
+        POST /api/user/v1/accounts/cancel_retirement/
+
+        Cancels the retirement for a user's account.
+        This also handles the top level error handling, and permissions.
+        """
+        try:
+            retirement_id = request.data['retirement_id']
+        except KeyError:
+            return Response(
+                status=status.HTTP_400_BAD_REQUEST,
+                data={'message': 'retirement_id must be specified.'}
+            )
+
+        try:
+            retirement = UserRetirementStatus.objects.get(id=retirement_id)
+        except UserRetirementStatus.DoesNotExist:
+            return Response(data={"message": 'Retirement does not exist!'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if retirement.current_state.state_name != 'PENDING':
+            return Response(
+                status=status.HTTP_400_BAD_REQUEST,
+                data={
+                    "message": f"Retirement requests can only be cancelled for users in the PENDING state. Current "
+                               f"request state for '{retirement.original_username}': "
+                               f"{retirement.current_state.state_name}"
+                }
+            )
+
+        # Load the user record using the retired email address -and- change the email address back.
+        retirement.user.email = retirement.original_email
+        # Reset users password so they can request a password reset and log in again.
+        retirement.user.set_password(generate_password(length=25))
+        retirement.user.save()
+
+        # Delete the user retirement status record.
+        # No need to delete the accompanying "permanent" retirement request record - it gets done via Django signal.
+        retirement.delete()
+
+        return Response(data={"success": True}, status=status.HTTP_200_OK)
 
 
 class AccountRetirementStatusView(ViewSet):
