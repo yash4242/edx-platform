@@ -1,13 +1,60 @@
 """
 Field Descriptions
 """
+from django import forms
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.translation import gettext as _
 
 from common.djangoapps.student.models import UserProfile
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangoapps.user_api import accounts
 from openedx.core.djangoapps.user_authn.api.constants import SUPPORTED_FIELDS_TYPES
+
+FIELD_TYPE_MAP = {
+    forms.CharField: "text",
+    forms.PasswordInput: "password",
+    forms.ChoiceField: "select",
+    forms.TypedChoiceField: "select",
+    forms.Textarea: "textarea",
+    forms.BooleanField: "checkbox",
+    forms.EmailField: "email",
+}
+
+
+def add_extension_form_field(field_name, custom_form, field_description, field_type='required'):
+    """
+    Returns Extension form field values
+    """
+    restrictions = {}
+    if field_type == 'required':
+        if getattr(field_description, 'max_length', None):
+            restrictions['max_length'] = field_description.max_length
+        if getattr(field_description, 'min_length', None):
+            restrictions['min_length'] = field_description.min_length
+
+    field_options = getattr(
+        getattr(custom_form, 'Meta', None), 'serialization_options', {}
+    ).get(field_name, {})
+    field_type = field_options.get('field_type', FIELD_TYPE_MAP.get(field_description.__class__))
+
+    if not field_type:
+        raise ImproperlyConfigured(
+            f'Field type {field_type} not recognized for registration extension field {field_name}.'
+        )
+
+    return {
+        'name': field_name,
+        'label': field_description.label,
+        'default': field_options.get('default'),
+        'placeholder': field_description.initial,
+        'instructions': field_description.help_text,
+        'options': getattr(field_description, 'choices', None),
+        'error_message': field_description.error_messages if field_type == 'required' else '',
+        'restrictions': restrictions,
+        'type': field_type,
+
+    }
 
 
 def _add_field_with_configurable_select_options(field_name, field_label, error_message=''):
@@ -163,3 +210,118 @@ def add_job_title_field():
     # user to input the Job Title
     job_title_label = _("Job Title")
     return _add_field_with_configurable_select_options('job_title', job_title_label)
+
+
+def add_first_name_field():
+    """
+    Returns the first name field description
+    """
+    # Translators: This label appears above a field which allows the
+    # user to input the First Name
+    first_name_label = _("First Name")
+
+    return {
+        'name': 'first_name',
+        'type': SUPPORTED_FIELDS_TYPES['TEXT'],
+        'label': first_name_label,
+        'error_message': accounts.REQUIRED_FIELD_FIRST_NAME_MSG,
+    }
+
+
+def add_last_name_field():
+    """
+    Returns the last name field description
+    """
+    # Translators: This label appears above a field which allows the
+    # user to input the Last Name
+    last_name_label = _("Last Name")
+
+    return {
+        'name': 'last_name',
+        'type': SUPPORTED_FIELDS_TYPES['TEXT'],
+        'label': last_name_label,
+        'error_message': accounts.REQUIRED_FIELD_LAST_NAME_MSG,
+    }
+
+
+def add_mailing_address_field():
+    """
+    Returns the mailing address field description
+    """
+    # Translators: This label appears above a field
+    # meant to hold the user's mailing address.
+    mailing_address_label = _("Mailing address")
+
+    return {
+        'name': 'mailing_address',
+        'type': SUPPORTED_FIELDS_TYPES['TEXTAREA'],
+        'label': mailing_address_label,
+        'error_message': accounts.REQUIRED_FIELD_MAILING_ADDRESS_MSG,
+    }
+
+
+def add_state_field():
+    """
+    Returns a State/Province/Region field description
+    """
+    # Translators: This label appears above a field
+    # which allows the user to input the State/Province/Region in which they live.
+    state_label = _("State/Province/Region")
+
+    return {
+        'name': 'state',
+        'type': SUPPORTED_FIELDS_TYPES['TEXT'],
+        'label': state_label,
+        'error_message': accounts.REQUIRED_FIELD_STATE_MSG,
+    }
+
+
+def add_city_field():
+    """
+    Returns a city field description
+    """
+    # Translators: This label appears above a field
+    # which allows the user to input the city in which they live.
+    city_label = _("City")
+
+    return {
+        'name': 'city',
+        'type': SUPPORTED_FIELDS_TYPES['TEXT'],
+        'label': city_label,
+        'error_message': accounts.REQUIRED_FIELD_CITY_MSG,
+    }
+
+
+def add_honor_code_field(separate_honor_and_tos=False):
+    """
+    Returns a honor code field description and this field will be displayed
+    directly on AuthnMFE
+    """
+    terms_type = "honor_code" if separate_honor_and_tos else "tos_and_honor_code"
+    terms_label = "Honor Code" if separate_honor_and_tos else "Terms of Service and Honor Code"
+    platform_name = configuration_helpers.get_value("PLATFORM_NAME", settings.PLATFORM_NAME)
+
+    # Translators: "Terms of Service" is a legal document users must agree to
+    # in order to register a new account.
+    error_msg = f'You must agree to the {platform_name} {terms_label}' if separate_honor_and_tos else ''
+    return {
+        'name': 'honor_code',
+        'type': terms_type,
+        'error_message': error_msg,
+    }
+
+
+def add_terms_of_service_field():
+    """
+    Returns terms of condition field description
+    """
+    terms_label = _("Terms of Service")
+    platform_name = configuration_helpers.get_value("PLATFORM_NAME", settings.PLATFORM_NAME)
+
+    # Translators: "Terms of service" is a legal document users must agree to
+    # in order to register a new account.
+    error_msg = f'You must agree to the {platform_name} {terms_label}'
+    return {
+        'name': 'terms_of_service',
+        'error_message': error_msg,
+    }
