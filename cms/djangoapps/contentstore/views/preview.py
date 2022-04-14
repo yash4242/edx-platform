@@ -216,7 +216,6 @@ def _preview_module_system(request, descriptor, field_data):
             "settings": SettingsService(),
             "user": DjangoXBlockUserService(
                 request.user,
-                anonymous_user_id='student',
                 user_role=get_user_role(request.user, course_id),
             ),
             "partitions": StudioPartitionService(course_id=course_id),
