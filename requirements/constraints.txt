@@ -25,7 +25,7 @@ django-storages<1.9
 # The team that owns this package will manually bump this package rather than having it pulled in automatically.
 # This is to allow them to better control its deployment and to do it in a process that works better
 # for them.
-edx-enterprise==3.42.5
+edx-enterprise==3.43.0
 
 # Newer versions need a more recent version of python-dateutil
 freezegun==0.3.12
@@ -49,21 +49,11 @@ pandas==0.22.0
 # networkx>=2.6 requires pandas>=1.1
 networkx<2.6
 
-# Constraint from astroid 2.3.3
-wrapt==1.11.*
-
 # tests failing for pymongo==3.11
 pymongo<3.11
 
-# sympy latest version causing test failures.
-# may be related to python35 version drop in 1.7.0. Needs to be tested before removing.
-sympy==1.6.2
-
 # python3-saml==1.10.0 version started breaking a11y tests
 python3-saml<1.10.0
-
-# latest version of diff-cover conflicts with pygments version see https://github.com/Bachmann1234/diff_cover/commit/01f91760321cee1ad28cfa0d801c4acd8b9765a6
-diff-cover==4.0.0
 
 # transifex-client==0.14.2(latest) requires python-slugify<5.0.0 for Python 2.0 support.
 # This can be removed once transifex-client drops support for Python 2.0 and removes the required constraint.

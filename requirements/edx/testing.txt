@@ -148,6 +148,8 @@ cffi==1.15.0
 chardet==4.0.0
     # via
     #   -r requirements/edx/base.txt
+    #   -r requirements/edx/coverage.txt
+    #   diff-cover
     #   pysrt
 charset-normalizer==2.0.12
     # via
@@ -245,10 +247,8 @@ deprecated==1.2.13
     #   -r requirements/edx/base.txt
     #   jwcrypto
     #   redis
-diff-cover==4.0.0
-    # via
-    #   -c requirements/edx/../constraints.txt
-    #   -r requirements/edx/coverage.txt
+diff-cover==6.4.5
+    # via -r requirements/edx/coverage.txt
 dill==0.3.4
     # via pylint
 distlib==0.3.4
@@ -542,7 +542,7 @@ edx-drf-extensions==8.0.1
     #   edx-rbac
     #   edx-when
     #   edxval
-edx-enterprise==3.42.5
+edx-enterprise==3.43.0
     # via
     #   -c requirements/edx/../constraints.txt
     #   -r requirements/edx/base.txt
@@ -709,10 +709,6 @@ importlib-metadata==4.11.3
     #   -r requirements/edx/base.txt
     #   markdown
     #   pytest-randomly
-inflect==5.5.2
-    # via
-    #   -r requirements/edx/coverage.txt
-    #   jinja2-pluralize
 inflection==0.5.1
     # via
     #   -r requirements/edx/base.txt
@@ -743,11 +739,6 @@ jinja2==3.1.1
     #   -r requirements/edx/coverage.txt
     #   code-annotations
     #   coreschema
-    #   diff-cover
-    #   jinja2-pluralize
-jinja2-pluralize==0.3.0
-    # via
-    #   -r requirements/edx/coverage.txt
     #   diff-cover
 jmespath==0.10.0
     # via
@@ -1326,9 +1317,8 @@ super-csv==3.0.0
     # via
     #   -r requirements/edx/base.txt
     #   edx-bulk-grades
-sympy==1.6.2
+sympy==1.10.1
     # via
-    #   -c requirements/edx/../constraints.txt
     #   -r requirements/edx/base.txt
     #   openedx-calc
 tableauserverclient==0.18.0
@@ -1431,9 +1421,8 @@ webob==1.8.7
     #   -r requirements/edx/base.txt
     #   xblock
     #   xmodule
-wrapt==1.11.2
+wrapt==1.14.0
     # via
-    #   -c requirements/edx/../constraints.txt
     #   -r requirements/edx/base.txt
     #   astroid
     #   deprecated

@@ -8,7 +8,7 @@ import itertools
 import json
 import re
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, PropertyMock, call, create_autospec, patch
+from unittest.mock import MagicMock, PropertyMock, create_autospec, patch
 from urllib.parse import urlencode
 from uuid import uuid4
 
@@ -30,7 +30,7 @@ from freezegun import freeze_time
 from markupsafe import escape
 from milestones.tests.utils import MilestonesTestCaseMixin
 from opaque_keys.edx.keys import CourseKey, UsageKey
-from pytz import UTC, utc
+from pytz import UTC
 from web_fragments.fragment import Fragment
 from xblock.core import XBlock
 from xblock.fields import Scope, String
@@ -79,7 +79,6 @@ from lms.djangoapps.certificates.tests.factories import (
 )
 from lms.djangoapps.commerce.models import CommerceConfiguration
 from lms.djangoapps.commerce.utils import EcommerceService
-from lms.djangoapps.course_home_api.toggles import COURSE_HOME_USE_LEGACY_FRONTEND
 from lms.djangoapps.courseware import access_utils
 from lms.djangoapps.courseware.access_utils import check_course_open_for_learner
 from lms.djangoapps.courseware.model_data import FieldDataCache, set_score
@@ -97,7 +96,6 @@ from lms.djangoapps.courseware.user_state_client import DjangoXBlockUserStateCli
 from lms.djangoapps.grades.config.waffle import ASSUME_ZERO_GRADE_IF_ABSENT
 from lms.djangoapps.grades.config.waffle import waffle_switch as grades_waffle_switch
 from lms.djangoapps.instructor.access import allow_access
-from lms.djangoapps.verify_student.models import VerificationDeadline
 from lms.djangoapps.verify_student.services import IDVerificationService
 from openedx.core.djangoapps.catalog.tests.factories import CourseFactory as CatalogCourseFactory
 from openedx.core.djangoapps.catalog.tests.factories import CourseRunFactory, ProgramFactory
@@ -115,7 +113,6 @@ from openedx.features.course_experience import (
     COURSE_ENABLE_UNENROLLED_ACCESS_FLAG,
     DISABLE_COURSE_OUTLINE_PAGE_FLAG,
     DISABLE_UNIFIED_COURSE_TAB_FLAG,
-    RELATIVE_DATES_FLAG
 )
 from openedx.features.course_experience.tests.views.helpers import add_course_mode
 from openedx.features.course_experience.url_helpers import (
@@ -144,13 +141,6 @@ def _set_preview_mfe_flag(active: bool):
     A decorator/contextmanager to force the courseware MFE educator preview flag on or off.
     """
     return override_waffle_flag(COURSEWARE_MICROFRONTEND_COURSE_TEAM_PREVIEW, active=active)
-
-
-def _set_course_home_mfe_flag(activate_mfe: bool):
-    """
-    A decorator/contextmanager to force the courseware home MFE flag on or off.
-    """
-    return override_waffle_flag(COURSE_HOME_USE_LEGACY_FRONTEND, active=(not activate_mfe))
 
 
 @ddt.ddt
@@ -593,32 +583,17 @@ class ViewsTestCase(BaseViewsTestCase):
         self.assertNotContains(response, 'Problem 1')
         self.assertNotContains(response, 'Problem 2')
 
-    @ddt.data(False, True)
-    def test_mfe_link_from_about_page(self, activate_mfe):
+    def test_mfe_link_from_about_page(self):
         """
-        Verify course about page links to the MFE when enabled.
+        Verify course about page links to the MFE.
         """
         with self.store.default_store(ModuleStoreEnum.Type.split):
             course = CourseFactory.create()
         CourseEnrollment.enroll(self.user, course.id)
         assert self.client.login(username=self.user.username, password=TEST_PASSWORD)
 
-        legacy_url = reverse(
-            'openedx.course_experience.course_home',
-            kwargs={
-                'course_id': str(course.id),
-            }
-        )
-        mfe_url = get_learning_mfe_home_url(course_key=course.id, url_fragment='home')
-
-        with _set_course_home_mfe_flag(activate_mfe):
-            response = self.client.get(reverse('about_course', args=[str(course.id)]))
-            if activate_mfe:
-                self.assertContains(response, mfe_url)
-                self.assertNotContains(response, legacy_url)
-            else:
-                self.assertNotContains(response, mfe_url)
-                self.assertContains(response, legacy_url)
+        response = self.client.get(reverse('about_course', args=[str(course.id)]))
+        self.assertContains(response, get_learning_mfe_home_url(course_key=course.id, url_fragment='home'))
 
     def _create_url_for_enroll_staff(self):
         """
@@ -3496,146 +3471,17 @@ class AccessUtilsTestCase(ModuleStoreTestCase):
         assert bool(check_course_open_for_learner(staff_user, course)) == expected_value
 
 
-@ddt.ddt
-@override_waffle_flag(COURSE_HOME_USE_LEGACY_FRONTEND, active=True)
-class DatesTabTestCase(ModuleStoreTestCase):
+class DatesTabTestCase(TestCase):
     """
-    Ensure that the dates page renders with the correct data for both a verified and audit learner
+    Ensure that the legacy dates view redirects appropriately (it no longer exists).
     """
-    def setUp(self):
-        super().setUp()
-
-        now = datetime.now(utc)
-        self.course = CourseFactory.create(start=now + timedelta(days=-1), self_paced=True)
-        self.course.end = now + timedelta(days=3)
-
-        ContentTypeGatingConfig.objects.create(enabled=True, enabled_as_of=datetime(2018, 1, 1))
-        CourseModeFactory(course_id=self.course.id, mode_slug=CourseMode.AUDIT)
-        CourseModeFactory(
-            course_id=self.course.id,
-            mode_slug=CourseMode.VERIFIED,
-            expiration_datetime=now + timedelta(days=1)
-        )
-        VerificationDeadline.objects.create(
-            course_key=self.course.id,
-            deadline=now + timedelta(days=2)
-        )
-
-        self.user = UserFactory()
-        self.client.login(username=self.user.username, password=TEST_PASSWORD)
-        ContentTypeGatingConfig.objects.create(enabled=True, enabled_as_of=datetime(2017, 1, 1))
-
-    def _get_response(self, course):
-        """ Returns the HTML for the dates page """
-        return self.client.get(reverse('dates', args=[str(course.id)]))
-
-    def test_tab_redirects_if_not_logged_in(self):
-        self.client.logout()
-        response = self._get_response(self.course)
-        assert response.status_code == 302
-        assert '/login?next=/courses/' in response.url
-
-    def test_tab_redirects_if_not_enrolled_and_not_staff(self):
-        response = self._get_response(self.course)
-        assert response.status_code == 302
-        # Beginning of redirect URL
-        assert '/courses/' in response.url
-        # End of redirect URL
-        assert '/course/' in response.url
-
-        # Now check staff users can see
-        self.user.is_staff = True
-        self.user.save()
-        response = self._get_response(self.course)
-        assert response.status_code == 200
-
-        # Enrolled users can also see
-        self.client.logout()
-        enrolled_user = UserFactory()
-        CourseEnrollmentFactory(course_id=self.course.id, user=enrolled_user, mode=CourseMode.VERIFIED)
-        self.client.login(username=enrolled_user.username, password=TEST_PASSWORD)
-        response = self._get_response(self.course)
-        assert response.status_code == 200
-
-    @override_waffle_flag(RELATIVE_DATES_FLAG, active=True)
-    @patch('edx_django_utils.monitoring.set_custom_attribute')
-    def test_defaults(self, mock_set_custom_attribute):
-        enrollment = CourseEnrollmentFactory(course_id=self.course.id, user=self.user, mode=CourseMode.VERIFIED)
-        now = datetime.now(utc)
-        with self.store.bulk_operations(self.course.id):
-            section = ItemFactory.create(category='chapter', parent_location=self.course.location)
-            subsection = ItemFactory.create(
-                category='sequential',
-                display_name='Released',
-                parent_location=section.location,
-                start=now - timedelta(days=1),
-                due=now + timedelta(days=1),  # Setting this to tomorrow so it'll show the 'Due Next' pill
-                graded=True,
-                format='Homework',
-            )
-            vertical = ItemFactory.create(category='vertical', parent_location=subsection.location)
-            ItemFactory.create(category='problem', parent_location=vertical.location, has_score=True)
-
-        response = self._get_response(self.course)
-        self.assertContains(response, subsection.display_name)
-        # Show the Verification Deadline for verified only
-        self.assertContains(response, 'Verification Deadline')
-        # Make sure pill exists for today's date
-        self.assertContains(response, '<div class="pill today">')
-        # Make sure pill exists for next due assignment
-        self.assertContains(response, '<div class="pill due-next">')
-        # No pills for verified enrollments
-        self.assertNotContains(response, '<div class="pill verified">')
-        # Make sure the assignment type is rendered
-        self.assertContains(response, 'Homework:')
-
-        enrollment.delete()
-        enrollment = CourseEnrollmentFactory(course_id=self.course.id, user=self.user, mode=CourseMode.AUDIT)
-
-        expected_calls = [
-            call('course_id', str(self.course.id)),
-            call('user_id', self.user.id),
-            call('is_staff', self.user.is_staff),
-        ]
-
-        response = self._get_response(self.course)
-
-        mock_set_custom_attribute.assert_has_calls(expected_calls, any_order=True)
-        self.assertContains(response, subsection.display_name)
-        # Don't show the Verification Deadline for audit
-        self.assertNotContains(response, 'Verification Deadline')
-        # Pill doesn't exist for assignment due tomorrow
-        self.assertNotContains(response, '<div class="pill due-next">')
-        # Should have verified pills for audit enrollments
-        self.assertContains(response, '<div class="pill verified">')
-        # Make sure the assignment type is rendered
-        self.assertContains(response, 'Homework:')
-
-    @override_waffle_flag(RELATIVE_DATES_FLAG, active=True)
-    def test_reset_deadlines_banner_displays(self):
-        CourseEnrollmentFactory(course_id=self.course.id, user=self.user, mode=CourseMode.VERIFIED)
-        now = datetime.now(utc)
-        with self.store.bulk_operations(self.course.id):
-            section = ItemFactory.create(category='chapter', parent_location=self.course.location)
-            ItemFactory.create(
-                category='sequential',
-                display_name='Released',
-                parent_location=section.location,
-                start=now - timedelta(days=1),
-                due=now - timedelta(days=1),  # Setting this to tomorrow so it'll show the 'Due Next' pill
-                graded=True,
-            )
-        response = self._get_response(self.course)
-        self.assertContains(response, 'div class="banner-cta-text"')
-
-    @override_waffle_flag(COURSE_HOME_USE_LEGACY_FRONTEND, active=False)
     def test_legacy_redirect(self):
         """
         Verify that the legacy dates page redirects to the MFE correctly.
         """
-        response = self.client.get(reverse('dates', args=[str(self.course.id)]) + '?foo=b$r')
+        response = self.client.get('/courses/course-v1:Org+Course+Run/dates?foo=b$r')
         assert response.status_code == 302
-        assert response.get('Location') == f'http://learning-mfe/course/{self.course.id}/dates?foo=b%24r'
+        assert response.get('Location') == 'http://learning-mfe/course/course-v1:Org+Course+Run/dates?foo=b%24r'
 
 
 class TestShowCoursewareMFE(TestCase):
@@ -3936,7 +3782,6 @@ class TestCourseWideResources(ModuleStoreTestCase):
 
     @ddt.data(
         ('courseware', 'course_id', False, True),
-        ('dates', 'course_id', False, False),
         ('progress', 'course_id', False, False),
         ('instructor_dashboard', 'course_id', True, False),
         ('forum_form_discussion', 'course_id', False, False),

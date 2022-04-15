@@ -1,22 +1,35 @@
 """
-This is the common settings file, intended to set sane defaults. If you have a
-piece of configuration that's dependent on a set of feature flags being set,
-then create a function that returns the calculated value based on the value of
-FEATURES[...]. Modules that extend this one can change the feature
-configuration in an environment specific config file and re-calculate those
-values.
+This is the common settings file, intended to set sane defaults.
 
-We should make a method that calls all these config methods so that you just
-make one call at the end of your site-specific dev file to reset all the
-dependent variables (like INSTALLED_APPS) for you.
+If you wish to override some of the settings set here without needing to specify
+everything, you should create a new settings file that imports the content of this
+one and then overrides anything you wish to make overridable.
 
-Longer TODO:
-1. Right now our treatment of static content in general and in particular
-   course-specific static content is haphazard.
-2. We should have a more disciplined approach to feature flagging, even if it
-   just means that we stick them in a dict called FEATURES.
-3. We need to handle configuration for multiple courses. This could be as
-   multiple sites, but we do need a way to map their data assets.
+Some known files that extend this one:
+
+- `production.py` - This file loads overrides from a yaml settings file and uses that
+    to override the settings set in this file.
+
+
+Conventions
+-----------
+
+1. Extending a List Setting
+
+    Sometimes settings take the form of a list and rather than replacing the
+    whole list, we want to add items to the list. eg. CELERY_IMPORTS.
+
+    In this case, it is recommended that a new variable created in your extended
+    file that contains the word `EXTRA` and enough of the base variable to easily
+    let people map between the two items.
+
+    Examples:
+        - CELERY_EXTRA_IMPORTS  (preferred format)
+        - EXTRA_MIDDLEWARE_CLASSES
+        - XBLOCK_EXTRA_MIXINS  (preferred format)
+
+    The preferred format for the name of the new setting (e.g. `CELERY_EXTRA_IMPORTS`) is to use
+    the same prefix (e.g. `CELERY`) of the setting that is being appended (e.g. `CELERY_IMPORTS`).
 """
 
 # We intentionally define lots of variables that aren't used
@@ -1023,8 +1036,6 @@ SOFTWARE_SECURE_REQUEST_RETRY_DELAY = 60 * 60
 SOFTWARE_SECURE_RETRY_MAX_ATTEMPTS = 6
 
 RETRY_CALENDAR_SYNC_EMAIL_MAX_ATTEMPTS = 5
-# Deadline message configurations
-COURSE_MESSAGE_ALERT_DURATION_IN_DAYS = 14
 
 MARKETING_EMAILS_OPT_IN = False
 
@@ -1040,6 +1051,9 @@ ENABLE_COPPA_COMPLIANCE = False
 
 # VAN-741 - save for later api put behind a flag to make it only available for edX
 ENABLE_SAVE_FOR_LATER = False
+
+# VAN-887 - save for later reminder emails threshold days
+SAVE_FOR_LATER_REMINDER_EMAIL_THRESHOLD = 15
 
 ############################# SET PATH INFORMATION #############################
 PROJECT_ROOT = path(__file__).abspath().dirname().dirname()  # /edx-platform/lms
@@ -2677,11 +2691,17 @@ DEBUG_TOOLBAR_PATCH_SETTINGS = False
 
 ################################# CELERY ######################################
 
-CELERY_IMPORTS = (
+CELERY_IMPORTS = [
     # Since xblock-poll is not a Django app, and XBlocks don't get auto-imported
     # by celery workers, its tasks will not get auto-discovered:
     'poll.tasks',
-)
+]
+
+# .. setting_name: CELERY_EXTRA_IMPORTS
+# .. setting_default: []
+# .. setting_description: Adds extra packages that don't get auto-imported (Example: XBlocks).
+#    These packages are added in addition to those added by CELERY_IMPORTS.
+CELERY_EXTRA_IMPORTS = []
 
 # Message configuration
 
@@ -3164,7 +3184,6 @@ INSTALLED_APPS = [
     'openedx.features.calendar_sync',
     'openedx.features.course_bookmarks',
     'openedx.features.course_experience',
-    'openedx.features.course_search',
     'openedx.features.enterprise_support.apps.EnterpriseSupportConfig',
     'openedx.features.learner_profile',
     'openedx.features.course_duration_limits',
@@ -5049,3 +5068,8 @@ DISCUSSION_MODERATION_CLOSE_REASON_CODES = {
     "duplicate": _("Post is a duplicate"),
     "off-topic": _("Post is off-topic"),
 }
+
+################# Settings for edx-financial-assistance #################
+IS_ELIGIBLE_FOR_FINANCIAL_ASSISTANCE_URL = '/core/api/course_eligibility/'
+FINANCIAL_ASSISTANCE_APPLICATION_STATUS_URL = "/core/api/financial_assistance_application/status/"
+CREATE_FINANCIAL_ASSISTANCE_APPLICATION_URL = '/core/api/financial_assistance_applications'

@@ -451,7 +451,7 @@ edx-drf-extensions==8.0.1
     #   edx-rbac
     #   edx-when
     #   edxval
-edx-enterprise==3.42.5
+edx-enterprise==3.43.0
     # via
     #   -c requirements/edx/../constraints.txt
     #   -r requirements/edx/base.in
@@ -1007,10 +1007,8 @@ super-csv==3.0.0
     # via
     #   -r requirements/edx/base.in
     #   edx-bulk-grades
-sympy==1.6.2
-    # via
-    #   -c requirements/edx/../constraints.txt
-    #   openedx-calc
+sympy==1.10.1
+    # via openedx-calc
 tableauserverclient==0.18.0
     # via edx-enterprise
 testfixtures==6.18.5
@@ -1065,9 +1063,8 @@ webob==1.8.7
     # via
     #   xblock
     #   xmodule
-wrapt==1.11.2
+wrapt==1.14.0
     # via
-    #   -c requirements/edx/../constraints.txt
     #   -r requirements/edx/paver.txt
     #   deprecated
 xblock==1.6.1
