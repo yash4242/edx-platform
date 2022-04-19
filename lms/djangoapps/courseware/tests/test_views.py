@@ -890,6 +890,17 @@ class ViewsTestCase(BaseViewsTestCase):
         assert response.status_code == 200
         self.assertContains(response, 'Financial Assistance Application')
 
+    @patch('lms.djangoapps.courseware.views.views._use_new_financial_assistance_flow', return_value=True)
+    @patch('lms.djangoapps.courseware.views.views.is_eligible_for_financial_aid', return_value=(False, 'error reason'))
+    def test_new_financial_assistance_page_course_ineligible(self, *args):
+        """
+        Test to verify the financial_assistance view against an ineligible course returns an error page.
+        """
+        url = reverse('financial_assistance_new', args=['course-v1:test+TestX+Test_Course'])
+        response = self.client.get(url)
+        assert response.status_code == 200
+        self.assertContains(response, 'This course is not eligible for Financial Assistance for the following reason:')
+
     @ddt.data(([CourseMode.AUDIT, CourseMode.VERIFIED], CourseMode.AUDIT, True, YESTERDAY),
               ([CourseMode.AUDIT, CourseMode.VERIFIED], CourseMode.VERIFIED, True, None),
               ([CourseMode.AUDIT, CourseMode.VERIFIED], CourseMode.AUDIT, False, None),

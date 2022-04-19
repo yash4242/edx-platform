@@ -17,6 +17,7 @@ from xmodule.partitions.partitions_service import PartitionService  # lint-amnes
 
 from common.djangoapps.course_modes.models import CourseMode
 from lms.djangoapps.commerce.utils import EcommerceService
+from lms.djangoapps.courseware.config import ENABLE_NEW_FINANCIAL_ASSISTANCE_FLOW
 from lms.djangoapps.courseware.constants import (
     UNEXPECTED_ERROR_APPLICATION_STATUS,
     UNEXPECTED_ERROR_CREATE_APPLICATION,
@@ -210,3 +211,15 @@ def get_course_hash_value(course_key):
         return int(m.hexdigest(), base=16) % 100
 
     return out_of_bound_value
+
+
+def _use_new_financial_assistance_flow(course_id):
+    """
+    Returns if the course_id can be used in the new financial assistance flow.
+    """
+    financial_assistance_configuration = FinancialAssistanceConfiguration.current()
+    if financial_assistance_configuration.enabled and ENABLE_NEW_FINANCIAL_ASSISTANCE_FLOW.is_enabled() and \
+            get_course_hash_value(course_id) <= \
+            financial_assistance_configuration.fa_backend_enabled_courses_percentage:
+        return True
+    return False
